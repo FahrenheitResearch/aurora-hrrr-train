@@ -88,26 +88,40 @@ class HRRRNativeDataset(Dataset):
         self.logger.info(f"  Atmospheric variables: {len(self.model_config.atmos_vars)}")
     
     def _find_hrrr_files(self) -> List[Tuple[Path, Path]]:
-        """Find HRRR surface and pressure file pairs"""
-        sfc_files = sorted(self.data_dir.glob("*_sfc.grib2"))
+        """Find HRRR surface and pressure file pairs (GRIB2 or NetCDF)"""
         file_pairs = []
         
+        # Try GRIB2 files first
+        sfc_files = sorted(self.data_dir.glob("*_sfc.grib2"))
         for sfc_file in sfc_files:
-            # Find corresponding pressure file
             prs_file = sfc_file.with_name(sfc_file.name.replace("_sfc.grib2", "_prs.grib2"))
-            
             if prs_file.exists():
                 file_pairs.append((sfc_file, prs_file))
             else:
                 self.logger.warning(f"No pressure file for {sfc_file.name}")
         
+        # If no GRIB2 files, try NetCDF files (for testing)
         if not file_pairs:
-            raise ValueError(f"No HRRR file pairs found in {self.data_dir}")
+            sfc_files = sorted(self.data_dir.glob("*_sfc.nc"))
+            for sfc_file in sfc_files:
+                prs_file = sfc_file.with_name(sfc_file.name.replace("_sfc.nc", "_prs.nc"))
+                if prs_file.exists():
+                    file_pairs.append((sfc_file, prs_file))
+                    self.logger.info(f"Using NetCDF test files: {sfc_file.name}")
+                else:
+                    self.logger.warning(f"No pressure file for {sfc_file.name}")
+        
+        if not file_pairs:
+            raise ValueError(f"No HRRR file pairs found in {self.data_dir} (tried .grib2 and .nc)")
         
         return file_pairs
     
     def _load_surface_variable(self, sfc_file: Path, var_name: str) -> Optional[np.ndarray]:
-        """Load a single surface variable from HRRR GRIB file"""
+        """Load a single surface variable from HRRR file (GRIB2 or NetCDF)"""
+        
+        # Handle NetCDF test files differently
+        if sfc_file.suffix == '.nc':
+            return self._load_surface_variable_netcdf(sfc_file, var_name)
         
         var_config = self.data_config.hrrr_surf_vars.get(var_name)
         if not var_config:
@@ -148,6 +162,34 @@ class HRRRNativeDataset(Dataset):
             
         except Exception as e:
             self.logger.warning(f"Failed to load {var_name} from {sfc_file}: {e}")
+            return None
+    
+    def _load_surface_variable_netcdf(self, sfc_file: Path, var_name: str) -> Optional[np.ndarray]:
+        """Load surface variable from NetCDF test file"""
+        
+        # Variable name mapping for test files
+        var_mapping = {
+            "2t": "2t", "10u": "10u", "10v": "10v", "msl": "mslma",
+            "cape": "cape", "cin": "cin", "refc": "refc", "hlcy": "hlcy", 
+            "mxuphl": "unknown"  # Max updraft helicity stored as 'unknown'
+        }
+        
+        try:
+            ds = xr.open_dataset(sfc_file)
+            nc_var_name = var_mapping.get(var_name, var_name)
+            
+            if nc_var_name in ds.data_vars:
+                data = ds[nc_var_name].values
+                if data.ndim > 2:
+                    data = data[0]  # Take first time step if present
+                self.logger.debug(f"✅ Loaded {var_name} from NetCDF: {data.min():.1f} to {data.max():.1f}")
+                return data
+            else:
+                self.logger.warning(f"Variable {var_name} ({nc_var_name}) not found in {sfc_file}")
+                return None
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to load {var_name} from NetCDF {sfc_file}: {e}")
             return None
     
     def _load_atmospheric_variables(self, prs_file: Path) -> Dict[str, np.ndarray]:

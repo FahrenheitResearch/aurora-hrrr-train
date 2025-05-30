@@ -14,24 +14,29 @@ import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
-from urllib.parse import urljoin
 import time
+import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
 
 from utils import setup_logging, Timer, ensure_directories
 
 class HRRRDownloader:
-    """Download HRRR data from NOAA archives"""
+    """Download HRRR data from NOAA S3 bucket"""
     
     def __init__(self, output_dir: str = "hrrr_data", max_concurrent: int = 4):
         self.output_dir = Path(output_dir)
         self.max_concurrent = max_concurrent
         self.logger = logging.getLogger(__name__)
         
-        # NOAA HRRR archive URLs
-        self.base_urls = [
-            "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod/",
+        # NOAA S3 bucket (public data, no credentials needed)
+        self.s3_bucket = 'noaa-hrrr-bdp-pds'
+        self.s3_client = boto3.client('s3', config=Config(signature_version=UNSIGNED))
+        
+        # Fallback HTTP URLs for older data
+        self.fallback_urls = [
+            "https://storage.googleapis.com/high-resolution-rapid-refresh/",
             "https://www.ncei.noaa.gov/data/high-resolution-rapid-refresh/access/",
-            "https://storage.googleapis.com/high-resolution-rapid-refresh/"
         ]
         
         # Ensure output directory exists
@@ -39,111 +44,120 @@ class HRRRDownloader:
         
         self.logger.info(f"HRRR Downloader initialized: {self.output_dir}")
     
-    def generate_file_urls(
+    def generate_file_keys(
         self, 
         start_date: str, 
         end_date: str, 
         run_hours: List[int] = [0, 12],
         forecast_hours: List[int] = [0, 1, 2]
     ) -> List[tuple]:
-        """Generate HRRR file URLs for date range"""
+        """Generate HRRR S3 keys for date range"""
         
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
         
-        urls = []
+        file_keys = []
         current_dt = start_dt
         
         while current_dt <= end_dt:
             for run_hour in run_hours:
                 for forecast_hour in forecast_hours:
-                    # Surface file
-                    sfc_filename = f"hrrr.{current_dt.strftime('%Y%m%d')}.t{run_hour:02d}z.wrfsfcf{forecast_hour:02d}.grib2"
-                    sfc_url = self._construct_url(current_dt, run_hour, sfc_filename)
-                    sfc_local_path = self.output_dir / f"hrrr_{current_dt.strftime('%Y%m%d')}_{run_hour:02d}z_f{forecast_hour:02d}_sfc.grib2"
+                    date_str = current_dt.strftime('%Y%m%d')
                     
-                    # Pressure file
-                    prs_filename = f"hrrr.{current_dt.strftime('%Y%m%d')}.t{run_hour:02d}z.wrfprsf{forecast_hour:02d}.grib2"
-                    prs_url = self._construct_url(current_dt, run_hour, prs_filename)
-                    prs_local_path = self.output_dir / f"hrrr_{current_dt.strftime('%Y%m%d')}_{run_hour:02d}z_f{forecast_hour:02d}_prs.grib2"
+                    # Surface file S3 key
+                    sfc_key = f"hrrr.{date_str}/conus/hrrr.t{run_hour:02d}z.wrfsfcf{forecast_hour:02d}.grib2"
+                    sfc_local_path = self.output_dir / f"hrrr_{date_str}_{run_hour:02d}z_f{forecast_hour:02d}_sfc.grib2"
                     
-                    urls.append(("surface", sfc_url, sfc_local_path))
-                    urls.append(("pressure", prs_url, prs_local_path))
+                    # Pressure file S3 key
+                    prs_key = f"hrrr.{date_str}/conus/hrrr.t{run_hour:02d}z.wrfprsf{forecast_hour:02d}.grib2"
+                    prs_local_path = self.output_dir / f"hrrr_{date_str}_{run_hour:02d}z_f{forecast_hour:02d}_prs.grib2"
+                    
+                    file_keys.append(("surface", sfc_key, sfc_local_path))
+                    file_keys.append(("pressure", prs_key, prs_local_path))
             
             current_dt += timedelta(days=1)
         
-        self.logger.info(f"Generated {len(urls)} file URLs from {start_date} to {end_date}")
-        return urls
+        self.logger.info(f"Generated {len(file_keys)} S3 keys from {start_date} to {end_date}")
+        return file_keys
     
-    def _construct_url(self, date: datetime, run_hour: int, filename: str) -> str:
-        """Construct HRRR file URL"""
-        # Try primary NOAA URL first
-        date_path = f"hrrr.{date.strftime('%Y%m%d')}/conus/"
-        return urljoin(self.base_urls[0], f"{date_path}{filename}")
-    
-    async def download_file(
-        self, 
-        session: aiohttp.ClientSession, 
-        url: str, 
-        local_path: Path,
-        file_type: str
-    ) -> bool:
-        """Download a single HRRR file"""
+    def download_s3_file(self, s3_key: str, local_path: Path, file_type: str) -> bool:
+        """Download a single HRRR file from S3"""
         
         if local_path.exists():
             self.logger.debug(f"File exists, skipping: {local_path.name}")
             return True
         
         try:
-            self.logger.info(f"Downloading {file_type}: {local_path.name}")
+            self.logger.info(f"Downloading {file_type}: {local_path.name} from S3")
             
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=600)) as response:
-                if response.status == 200:
-                    async with aiofiles.open(local_path, 'wb') as f:
-                        async for chunk in response.content.iter_chunked(8192):
-                            await f.write(chunk)
+            # Download from S3
+            self.s3_client.download_file(self.s3_bucket, s3_key, str(local_path))
+            
+            file_size_mb = local_path.stat().st_size / 1e6
+            self.logger.info(f"✅ Downloaded: {local_path.name} ({file_size_mb:.1f} MB)")
+            return True
+            
+        except Exception as e:
+            self.logger.debug(f"S3 download failed: {e}")
+            
+            # Try fallback HTTP if S3 fails (older data)
+            return self._download_fallback_http(s3_key, local_path, file_type)
+    
+    def _download_fallback_http(self, s3_key: str, local_path: Path, file_type: str) -> bool:
+        """Fallback to HTTP download if S3 fails"""
+        import requests
+        
+        # Extract filename from S3 key
+        filename = s3_key.split('/')[-1]
+        
+        for base_url in self.fallback_urls:
+            try:
+                url = f"{base_url}{s3_key}"
+                self.logger.debug(f"Trying fallback URL: {url}")
+                
+                response = requests.get(url, timeout=600, stream=True)
+                if response.status_code == 200:
+                    with open(local_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
                     
-                    self.logger.info(f"✅ Downloaded: {local_path.name} ({local_path.stat().st_size / 1e6:.1f} MB)")
+                    file_size_mb = local_path.stat().st_size / 1e6
+                    self.logger.info(f"✅ Downloaded (fallback): {local_path.name} ({file_size_mb:.1f} MB)")
                     return True
                 else:
-                    self.logger.warning(f"❌ Failed to download {local_path.name}: HTTP {response.status}")
-                    return False
+                    self.logger.debug(f"HTTP {response.status_code} from fallback")
                     
-        except asyncio.TimeoutError:
-            self.logger.error(f"❌ Timeout downloading {local_path.name}")
-            return False
-        except Exception as e:
-            self.logger.error(f"❌ Error downloading {local_path.name}: {e}")
-            return False
+            except Exception as e:
+                self.logger.debug(f"Fallback failed: {e}")
+                continue
+        
+        self.logger.warning(f"❌ Failed to download {local_path.name} from S3 and fallbacks")
+        return False
     
-    async def download_batch(self, file_urls: List[tuple]) -> dict:
-        """Download a batch of HRRR files concurrently"""
+    def download_batch(self, file_keys: List[tuple]) -> dict:
+        """Download a batch of HRRR files from S3"""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         
-        semaphore = asyncio.Semaphore(self.max_concurrent)
+        results = {"success": 0, "failed": 0}
         
-        async def download_with_semaphore(file_info):
-            async with semaphore:
-                file_type, url, local_path = file_info
-                return await self.download_file(session, url, local_path, file_type)
+        def download_single(file_info):
+            file_type, s3_key, local_path = file_info
+            return self.download_s3_file(s3_key, local_path, file_type)
         
-        results = {"success": 0, "failed": 0, "skipped": 0}
-        
-        connector = aiohttp.TCPConnector(limit=self.max_concurrent)
-        timeout = aiohttp.ClientTimeout(total=3600)  # 1 hour timeout
-        
-        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-            tasks = [download_with_semaphore(file_info) for file_info in file_urls]
-            
-            with Timer(f"Download batch ({len(file_urls)} files)"):
-                download_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            for result in download_results:
-                if isinstance(result, Exception):
-                    results["failed"] += 1
-                elif result:
-                    results["success"] += 1
-                else:
-                    results["failed"] += 1
+        with Timer(f"Download batch ({len(file_keys)} files)"):
+            with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
+                future_to_file = {executor.submit(download_single, file_info): file_info for file_info in file_keys}
+                
+                for future in as_completed(future_to_file):
+                    try:
+                        result = future.result()
+                        if result:
+                            results["success"] += 1
+                        else:
+                            results["failed"] += 1
+                    except Exception as e:
+                        self.logger.error(f"Download error: {e}")
+                        results["failed"] += 1
         
         return results
     
@@ -151,7 +165,7 @@ class HRRRDownloader:
         """Verify downloaded files"""
         results = {"valid": 0, "missing": 0, "corrupted": 0}
         
-        for file_type, url, local_path in file_urls:
+        for file_type, urls, local_path in file_urls:
             if not local_path.exists():
                 results["missing"] += 1
                 self.logger.warning(f"Missing file: {local_path.name}")
@@ -163,7 +177,7 @@ class HRRRDownloader:
         
         return results
     
-    async def download_data(
+    def download_data(
         self, 
         start_date: str, 
         end_date: str,
@@ -175,17 +189,17 @@ class HRRRDownloader:
         self.logger.info(f"🌦️  Starting HRRR download: {start_date} to {end_date}")
         self.logger.info(f"Run hours: {run_hours}, Forecast hours: {forecast_hours}")
         
-        # Generate file URLs
-        file_urls = self.generate_file_urls(start_date, end_date, run_hours, forecast_hours)
+        # Generate file keys
+        file_keys = self.generate_file_keys(start_date, end_date, run_hours, forecast_hours)
         
         # Download files
-        results = await self.download_batch(file_urls)
+        results = self.download_batch(file_keys)
         
         # Verify downloads
-        verification = self.verify_downloads(file_urls)
+        verification = self.verify_downloads(file_keys)
         
         # Summary
-        total_files = len(file_urls)
+        total_files = len(file_keys)
         self.logger.info(f"📊 Download Summary:")
         self.logger.info(f"  Total files: {total_files}")
         self.logger.info(f"  Downloaded: {results['success']}")
@@ -196,7 +210,7 @@ class HRRRDownloader:
         
         # Calculate total size
         total_size = sum(
-            path.stat().st_size for _, _, path in file_urls 
+            path.stat().st_size for _, _, path in file_keys 
             if path.exists()
         ) / 1e9
         self.logger.info(f"  Total size: {total_size:.2f} GB")
@@ -242,12 +256,12 @@ def main():
     
     # Download data
     try:
-        results = asyncio.run(downloader.download_data(
+        results = downloader.download_data(
             start_date=args.start_date,
             end_date=args.end_date,
             run_hours=args.run_hours,
             forecast_hours=args.forecast_hours
-        ))
+        )
         
         # Print final summary
         if results["verification"]["valid"] > 0:

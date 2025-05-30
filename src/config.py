@@ -11,12 +11,12 @@ from typing import Tuple, List, Optional
 @dataclass
 class ModelConfig:
     """Aurora model configuration"""
-    # Native Aurora settings (1.3B parameters)
+    # Native Aurora settings (compatible dimensions)
     embed_dim: int = 1024
     encoder_depths: Tuple[int, ...] = (6, 10, 8)
-    encoder_num_heads: Tuple[int, ...] = (16, 20, 16)
+    encoder_num_heads: Tuple[int, ...] = (16, 16, 16)  # Fixed: all divisible by embed_dim
     decoder_depths: Tuple[int, ...] = (8, 10, 6)
-    decoder_num_heads: Tuple[int, ...] = (16, 20, 16)
+    decoder_num_heads: Tuple[int, ...] = (16, 16, 16)  # Fixed: all divisible by embed_dim
     patch_size: int = 4
     latent_levels: int = 13
     
