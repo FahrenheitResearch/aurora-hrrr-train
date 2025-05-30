@@ -30,9 +30,10 @@ def test_aurora_basic():
     pressure_levels = [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 850, 925, 1000]
     atmos_vars = {}
     
-    # Test 1: Try without pressure level suffixes (3D tensors)
+    # Test 2: Individual 2D tensors with pressure level suffixes
     for var in ["z", "u", "v", "t", "q"]:
-        atmos_vars[var] = torch.randn(len(pressure_levels), height, width)
+        for level in pressure_levels:
+            atmos_vars[f"{var}_{level}"] = torch.randn(height, width)
     
     # Static variables
     static_vars = {
