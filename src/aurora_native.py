@@ -118,28 +118,14 @@ class AuroraNative(nn.Module):
         model_config = self.config["model"]
         
         try:
-            # Create Aurora model using the available class
+            # Create default Aurora model (1.3B params)
             self.aurora = AuroraClass(
                 surf_vars=model_config.surf_vars,
                 static_vars=model_config.static_vars,
-                atmos_vars=model_config.atmos_vars,
-                encoder_depths=model_config.encoder_depths,
-                encoder_num_heads=model_config.encoder_num_heads,
-                decoder_depths=model_config.decoder_depths,
-                decoder_num_heads=model_config.decoder_num_heads,
-                embed_dim=model_config.embed_dim,
-                patch_size=model_config.patch_size,
-                latent_levels=model_config.latent_levels,
-                autocast=model_config.use_mixed_precision
+                atmos_vars=model_config.atmos_vars
             )
             
-            # Load pretrained weights if requested
-            if pretrained:
-                try:
-                    self.aurora.load_checkpoint(strict=False)
-                    self.logger.info("✅ Loaded pretrained Aurora weights")
-                except Exception as e:
-                    self.logger.warning(f"Could not load pretrained weights: {e}")
+            self.logger.info("✅ Created 1.3B Aurora model")
             
             # Enable optimizations
             if model_config.gradient_checkpointing:
