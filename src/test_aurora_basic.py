@@ -30,10 +30,15 @@ def test_aurora_basic():
     pressure_levels = [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 850, 925, 1000]
     atmos_vars = {}
     
-    # Test 2: Individual 2D tensors with pressure level suffixes
-    for var in ["z", "u", "v", "t", "q"]:
-        for level in pressure_levels:
-            atmos_vars[f"{var}_{level}"] = torch.randn(height, width)
+    # Test 3: Check what Aurora normalization actually expects
+    from aurora.normalisation import locations, scales
+    print("Aurora normalization variables:")
+    atmos_norm_vars = [k for k in locations.keys() if any(var in k for var in ["z_", "u_", "v_", "t_", "q_"])]
+    print(f"  Expected atmos vars: {atmos_norm_vars[:10]}...")  # Show first 10
+    
+    # Use exactly what Aurora expects
+    for var_name in atmos_norm_vars:
+        atmos_vars[var_name] = torch.randn(height, width)
     
     # Static variables
     static_vars = {
