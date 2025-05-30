@@ -118,14 +118,10 @@ class AuroraNative(nn.Module):
         model_config = self.config["model"]
         
         try:
-            # Create default Aurora model (1.3B params)
-            self.aurora = AuroraClass(
-                surf_vars=model_config.surf_vars,
-                static_vars=model_config.static_vars,
-                atmos_vars=model_config.atmos_vars
-            )
+            # Create default Aurora model (1.3B params) - use defaults first
+            self.aurora = AuroraClass()
             
-            self.logger.info("✅ Created 1.3B Aurora model")
+            self.logger.info("✅ Created 1.3B Aurora model with default variables")
             
             # Enable optimizations
             if model_config.gradient_checkpointing:
