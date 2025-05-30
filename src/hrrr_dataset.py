@@ -367,15 +367,12 @@ class HRRRNativeDataset(Dataset):
                         mean, std = get_normalization_stats(var_name)
                         cropped_data = (cropped_data - mean) / std
                     
-                    # Create variables for each pressure level (Aurora expects this format)
-                    for level_idx, pressure_level in enumerate(self.data_config.pressure_levels):
-                        level_var_name = f"{var_name}_{int(pressure_level)}"
-                        atmos_vars[level_var_name] = torch.tensor(cropped_data[level_idx], dtype=torch.float32)
+                    # Aurora expects 3D tensors [levels, height, width]
+                    atmos_vars[var_name] = torch.tensor(cropped_data, dtype=torch.float32)
                 else:
-                    # Fallback to zeros for each pressure level
-                    for pressure_level in self.data_config.pressure_levels:
-                        level_var_name = f"{var_name}_{int(pressure_level)}"
-                        atmos_vars[level_var_name] = torch.zeros(self.grid_height, self.grid_width, dtype=torch.float32)
+                    # Fallback to zeros
+                    num_levels = len(self.data_config.pressure_levels)
+                    atmos_vars[var_name] = torch.zeros(num_levels, self.grid_height, self.grid_width, dtype=torch.float32)
             
             # Get static variables
             static_vars = self._get_static_variables(sfc_file)
