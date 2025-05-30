@@ -17,17 +17,17 @@ try:
     # Try different Aurora class names based on package version
     aurora_classes = []
     try:
-        from aurora import AuroraPretrained
-        aurora_classes.append("AuroraPretrained")
-        AuroraClass = AuroraPretrained
+        from aurora import Aurora
+        aurora_classes.append("Aurora")
+        AuroraClass = Aurora
     except ImportError:
         pass
     
     try:
-        from aurora import Aurora
-        aurora_classes.append("Aurora")
+        from aurora import AuroraPretrained
+        aurora_classes.append("AuroraPretrained")
         if 'AuroraClass' not in locals():
-            AuroraClass = Aurora
+            AuroraClass = AuroraPretrained
     except ImportError:
         pass
     
