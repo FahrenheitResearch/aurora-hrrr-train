@@ -26,13 +26,13 @@ def test_aurora_basic():
         "msl": torch.randn(height, width)
     }
     
-    # Atmospheric variables (Aurora defaults with pressure levels)
+    # Atmospheric variables - try different naming formats
     pressure_levels = [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 850, 925, 1000]
     atmos_vars = {}
     
+    # Test 1: Try without pressure level suffixes (3D tensors)
     for var in ["z", "u", "v", "t", "q"]:
-        for level in pressure_levels:
-            atmos_vars[f"{var}_{level}.0"] = torch.randn(height, width)
+        atmos_vars[var] = torch.randn(len(pressure_levels), height, width)
     
     # Static variables
     static_vars = {
@@ -61,9 +61,10 @@ def test_aurora_basic():
     )
     
     print(f"Created batch with:")
-    print(f"  Surface vars: {len(surf_vars)}")
-    print(f"  Atmospheric vars: {len(atmos_vars)}")
-    print(f"  Static vars: {len(static_vars)}")
+    print(f"  Surface vars: {list(surf_vars.keys())}")
+    print(f"  Atmospheric vars: {list(atmos_vars.keys())}")
+    print(f"  Static vars: {list(static_vars.keys())}")
+    print(f"  Atmos shapes: {[(k, v.shape) for k, v in atmos_vars.items()]}")
     
     try:
         with torch.no_grad():
