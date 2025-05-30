@@ -35,7 +35,18 @@ python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); 
 
 # Test Aurora import
 echo "🔬 Testing Aurora import..."
-python -c "from aurora import AuroraPretrained; print('Aurora imported successfully')"
+python -c "
+try:
+    from aurora import AuroraPretrained
+    from aurora.normalisation import locations, scales
+    from aurora import Batch, Metadata
+    print('✅ Aurora imported successfully')
+    print('Available classes:', [x for x in dir(__import__('aurora')) if 'Aurora' in x])
+except ImportError as e:
+    print(f'❌ Aurora import failed: {e}')
+    print('Available in aurora package:', dir(__import__('aurora')))
+    exit(1)
+"
 
 # Create directories
 echo "📁 Creating directories..."

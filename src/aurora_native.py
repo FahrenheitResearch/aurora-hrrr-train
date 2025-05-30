@@ -14,12 +14,33 @@ from config import get_config
 from utils import calculate_model_size, count_parameters
 
 try:
-    from aurora import AuroraPretrained
+    from aurora import AuroraPretrained, Batch, Metadata
     from aurora.normalisation import locations, scales
     AURORA_AVAILABLE = True
-except ImportError:
+    print("✅ Microsoft Aurora successfully imported")
+except ImportError as e:
     AURORA_AVAILABLE = False
-    print("Warning: Microsoft Aurora not available. Using placeholder implementation.")
+    print(f"⚠️  Warning: Microsoft Aurora not available ({e}). Using placeholder implementation.")
+    
+    # Create placeholder classes
+    class AuroraPretrained:
+        def __init__(self, **kwargs):
+            pass
+        def __call__(self, *args, **kwargs):
+            return None
+    
+    class Batch:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+    
+    class Metadata:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+    
+    locations = {}
+    scales = {}
 
 class AuroraNative(nn.Module):
     """

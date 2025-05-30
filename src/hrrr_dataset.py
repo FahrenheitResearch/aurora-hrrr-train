@@ -17,21 +17,28 @@ from dataclasses import dataclass
 from config import get_config
 from utils import Timer, get_normalization_stats, validate_grid_dimensions
 
-@dataclass
-class Metadata:
-    """Aurora metadata structure"""
-    lat: torch.Tensor
-    lon: torch.Tensor
-    time: torch.Tensor
-    atmos_levels: torch.Tensor
+# Try to import Aurora classes, fallback to local definitions
+try:
+    from aurora import Batch, Metadata
+    print("✅ Using Aurora Batch and Metadata classes")
+except ImportError:
+    print("⚠️  Using local Batch and Metadata classes")
+    
+    @dataclass
+    class Metadata:
+        """Aurora metadata structure"""
+        lat: torch.Tensor
+        lon: torch.Tensor
+        time: torch.Tensor
+        atmos_levels: torch.Tensor
 
-@dataclass
-class Batch:
-    """Aurora batch structure"""
-    surf_vars: Dict[str, torch.Tensor]
-    atmos_vars: Dict[str, torch.Tensor]
-    static_vars: Dict[str, torch.Tensor]
-    metadata: Metadata
+    @dataclass
+    class Batch:
+        """Aurora batch structure"""
+        surf_vars: Dict[str, torch.Tensor]
+        atmos_vars: Dict[str, torch.Tensor]
+        static_vars: Dict[str, torch.Tensor]
+        metadata: Metadata
 
 class HRRRNativeDataset(Dataset):
     """
