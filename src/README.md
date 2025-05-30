@@ -95,23 +95,25 @@ Expected on H100:
 ### Aurora Import Issues
 If you get `ImportError: cannot import name 'AuroraPretrained'`:
 
+**Note**: Different Aurora package versions have different class names:
+- Newer versions: `Aurora`, `AuroraHighRes`, `AuroraSmall`
+- Older versions: `AuroraPretrained`, `AuroraSmallPretrained`
+
 1. **Test the installation:**
    ```bash
    python test_imports.py
    python diagnose_aurora.py
    ```
 
-2. **Reinstall Aurora:**
+2. **Check available classes:**
+   ```bash
+   python -c "import aurora; print([x for x in dir(aurora) if 'Aurora' in x])"
+   ```
+
+3. **Reinstall Aurora if needed:**
    ```bash
    pip uninstall microsoft-aurora
    pip install microsoft-aurora
-   ```
-
-3. **Check environment:**
-   ```bash
-   conda activate aurora_h100
-   which python
-   pip list | grep aurora
    ```
 
 ### Out of Memory

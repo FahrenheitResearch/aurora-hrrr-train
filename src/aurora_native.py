@@ -14,16 +14,44 @@ from config import get_config
 from utils import calculate_model_size, count_parameters
 
 try:
-    from aurora import AuroraPretrained, Batch, Metadata
+    # Try different Aurora class names based on package version
+    aurora_classes = []
+    try:
+        from aurora import AuroraPretrained
+        aurora_classes.append("AuroraPretrained")
+        AuroraClass = AuroraPretrained
+    except ImportError:
+        pass
+    
+    try:
+        from aurora import Aurora
+        aurora_classes.append("Aurora")
+        if 'AuroraClass' not in locals():
+            AuroraClass = Aurora
+    except ImportError:
+        pass
+    
+    try:
+        from aurora import AuroraHighRes
+        aurora_classes.append("AuroraHighRes") 
+        if 'AuroraClass' not in locals():
+            AuroraClass = AuroraHighRes
+    except ImportError:
+        pass
+    
+    from aurora import Batch, Metadata
     from aurora.normalisation import locations, scales
+    
     AURORA_AVAILABLE = True
-    print("✅ Microsoft Aurora successfully imported")
+    print(f"✅ Microsoft Aurora successfully imported (available classes: {aurora_classes})")
+    print(f"   Using class: {AuroraClass.__name__}")
+    
 except ImportError as e:
     AURORA_AVAILABLE = False
     print(f"⚠️  Warning: Microsoft Aurora not available ({e}). Using placeholder implementation.")
     
     # Create placeholder classes
-    class AuroraPretrained:
+    class AuroraClass:
         def __init__(self, **kwargs):
             pass
         def __call__(self, *args, **kwargs):
@@ -90,8 +118,8 @@ class AuroraNative(nn.Module):
         model_config = self.config["model"]
         
         try:
-            # Create Aurora model
-            self.aurora = AuroraPretrained(
+            # Create Aurora model using the available class
+            self.aurora = AuroraClass(
                 surf_vars=model_config.surf_vars,
                 static_vars=model_config.static_vars,
                 atmos_vars=model_config.atmos_vars,

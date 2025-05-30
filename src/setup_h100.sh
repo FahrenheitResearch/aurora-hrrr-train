@@ -37,14 +37,32 @@ python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); 
 echo "🔬 Testing Aurora import..."
 python -c "
 try:
-    from aurora import AuroraPretrained
-    from aurora.normalisation import locations, scales
+    import aurora
+    print('✅ Aurora package imported successfully')
+    aurora_classes = [x for x in dir(aurora) if 'Aurora' in x]
+    print('Available Aurora classes:', aurora_classes)
+    
+    # Test specific imports
     from aurora import Batch, Metadata
-    print('✅ Aurora imported successfully')
-    print('Available classes:', [x for x in dir(__import__('aurora')) if 'Aurora' in x])
+    from aurora.normalisation import locations, scales
+    print('✅ Batch, Metadata, and normalisation imported successfully')
+    
+    # Try to import an Aurora model class
+    model_class = None
+    for class_name in ['Aurora', 'AuroraHighRes', 'AuroraSmall', 'AuroraPretrained']:
+        try:
+            model_class = getattr(aurora, class_name)
+            print(f'✅ Using Aurora model class: {class_name}')
+            break
+        except AttributeError:
+            continue
+    
+    if model_class is None:
+        print('❌ No Aurora model class found')
+        exit(1)
+        
 except ImportError as e:
     print(f'❌ Aurora import failed: {e}')
-    print('Available in aurora package:', dir(__import__('aurora')))
     exit(1)
 "
 

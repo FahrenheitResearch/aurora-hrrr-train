@@ -39,11 +39,23 @@ def test_aurora_imports():
     
     try:
         import aurora
+        aurora_classes = [x for x in dir(aurora) if 'Aurora' in x]
         print(f"✅ Aurora package imported")
-        print(f"   Available classes: {[x for x in dir(aurora) if 'Aurora' in x]}")
+        print(f"   Available classes: {aurora_classes}")
         
-        from aurora import AuroraPretrained
-        print("✅ AuroraPretrained imported")
+        # Try to import any available Aurora model class
+        model_class = None
+        for class_name in ['Aurora', 'AuroraHighRes', 'AuroraSmall', 'AuroraPretrained']:
+            try:
+                model_class = getattr(aurora, class_name)
+                print(f"✅ {class_name} imported successfully")
+                break
+            except AttributeError:
+                continue
+        
+        if model_class is None:
+            print("❌ No Aurora model class found")
+            return False
         
         from aurora import Batch, Metadata
         print("✅ Batch and Metadata imported")
@@ -115,6 +127,7 @@ def test_model_creation():
     print("\n🏗️  Testing model creation...")
     
     try:
+        import torch
         from aurora_native import create_aurora_native
         
         device = "cuda" if torch.cuda.is_available() else "cpu"
