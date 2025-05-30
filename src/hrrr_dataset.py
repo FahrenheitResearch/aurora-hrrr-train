@@ -369,12 +369,12 @@ class HRRRNativeDataset(Dataset):
                     
                     # Create variables for each pressure level (Aurora expects this format)
                     for level_idx, pressure_level in enumerate(self.data_config.pressure_levels):
-                        level_var_name = f"{var_name}_{pressure_level}"
+                        level_var_name = f"{var_name}_{int(pressure_level)}"
                         atmos_vars[level_var_name] = torch.tensor(cropped_data[level_idx], dtype=torch.float32)
                 else:
                     # Fallback to zeros for each pressure level
                     for pressure_level in self.data_config.pressure_levels:
-                        level_var_name = f"{var_name}_{pressure_level}"
+                        level_var_name = f"{var_name}_{int(pressure_level)}"
                         atmos_vars[level_var_name] = torch.zeros(self.grid_height, self.grid_width, dtype=torch.float32)
             
             # Get static variables
